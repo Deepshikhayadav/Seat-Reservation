@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: seat_reservation
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/seat_reservation
+    username: reservation_user
+    password: reservation_password
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+server:
+  port: 8082
+
+
