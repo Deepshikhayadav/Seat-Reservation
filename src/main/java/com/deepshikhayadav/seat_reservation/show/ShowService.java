@@ -54,4 +54,55 @@ public class ShowService {
 
         return show;
     }
+
+
+    @Transactional(readOnly = true)
+    public ShowResponse getShow(UUID showId) {
+
+        Show show = showRepository.findById(showId)
+                .orElseThrow(() ->
+                        new RuntimeException("Show not found"));
+
+        List<Seat> seats = seatRepository.findByShowId(showId);
+
+        int available = 0;
+        int held = 0;
+        int confirmed = 0;
+
+        List<SeatResponse> seatResponses = new ArrayList<>();
+
+        for (Seat seat : seats) {
+
+            switch (seat.getStatus()) {
+
+                case "AVAILABLE" -> available++;
+
+                case "HELD" -> held++;
+
+                case "CONFIRMED" -> confirmed++;
+
+                default ->
+                        throw new IllegalStateException(
+                                "Unknown seat status: " + seat.getStatus());
+            }
+
+            seatResponses.add(
+                    new SeatResponse(
+                            seat.getSeatNumber(),
+                            seat.getStatus().toLowerCase()
+                    )
+            );
+        }
+
+        return new ShowResponse(
+                show.getId(),
+                show.getName(),
+                show.getPricePaise(),
+                seats.size(),
+                available,
+                held,
+                confirmed,
+                seatResponses
+        );
+    }
 }

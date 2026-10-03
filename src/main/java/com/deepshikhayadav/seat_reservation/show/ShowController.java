@@ -2,6 +2,9 @@ package com.deepshikhayadav.seat_reservation.show;
 
 
 import jakarta.validation.Valid;
+
+import java.util.UUID;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,5 +24,10 @@ public class ShowController {
             @Valid @RequestBody CreateShowRequest request) {
 
         return showService.createShow(request);
+    }
+
+    @GetMapping("/{showId}")
+    public ShowResponse getShow(@PathVariable UUID showId) {
+        return showService.getShow(showId);
     }
 }

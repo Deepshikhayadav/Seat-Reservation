@@ -6,7 +6,8 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-
+@Getter
+@Setter
 @Entity
 @Table(
     name = "seats",
@@ -35,43 +36,4 @@ public class Seat {
     @Version
     private Long version;
 
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public UUID getShowId() {
-        return showId;
-    }
-
-    public void setShowId(UUID showId) {
-        this.showId = showId;
-    }
-
-    public String getSeatNumber() {
-        return seatNumber;
-    }
-
-    public void setSeatNumber(String seatNumber) {
-        this.seatNumber = seatNumber;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Long getVersion() {
-        return version;
-    }
-
-    public void setVersion(Long version) {
-        this.version = version;
-    }
 }
