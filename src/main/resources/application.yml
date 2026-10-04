@@ -29,9 +29,6 @@ management:
     health:
       probes:
         enabled: true
-
-      # Keep details available for local testing.
-      # We will override this for public deployment if desired.
       show-details: always
 
   health:
