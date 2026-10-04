@@ -1,12 +1,20 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.services;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.deepshikhayadav.seat_reservation.model.CreateShowRequest;
+import com.deepshikhayadav.seat_reservation.model.Show;
+import com.deepshikhayadav.seat_reservation.repository.SeatRepository;
+import com.deepshikhayadav.seat_reservation.repository.ShowRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import com.deepshikhayadav.seat_reservation.model.Seat;
+import com.deepshikhayadav.seat_reservation.model.SeatResponse;
+import com.deepshikhayadav.seat_reservation.model.ShowResponse;
 
 @Service
 public class ShowService {

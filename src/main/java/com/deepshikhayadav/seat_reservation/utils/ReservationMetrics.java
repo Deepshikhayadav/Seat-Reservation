@@ -1,4 +1,4 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.utils;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

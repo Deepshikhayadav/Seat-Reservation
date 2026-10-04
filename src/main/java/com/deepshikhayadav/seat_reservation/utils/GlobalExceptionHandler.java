@@ -1,4 +1,4 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.utils;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

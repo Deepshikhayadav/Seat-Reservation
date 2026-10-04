@@ -1,4 +1,4 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.utils;
 
 public class ReservationConflictException
         extends RuntimeException {

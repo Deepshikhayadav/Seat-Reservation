@@ -1,4 +1,4 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.model;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

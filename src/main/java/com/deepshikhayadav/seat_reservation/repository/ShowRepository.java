@@ -1,6 +1,8 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.deepshikhayadav.seat_reservation.model.Show;
 
 import java.util.UUID;
 

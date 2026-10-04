@@ -1,4 +1,4 @@
-package com.deepshikhayadav.seat_reservation.show;
+package com.deepshikhayadav.seat_reservation.controller;
 
 
 import jakarta.validation.Valid;
@@ -7,6 +7,11 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import com.deepshikhayadav.seat_reservation.model.CreateShowRequest;
+import com.deepshikhayadav.seat_reservation.model.Show;
+import com.deepshikhayadav.seat_reservation.model.ShowResponse;
+import com.deepshikhayadav.seat_reservation.services.ShowService;
 
 @RestController
 @RequestMapping("/shows")
