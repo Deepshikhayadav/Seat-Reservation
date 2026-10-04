@@ -1,15 +1,9 @@
 package com.deepshikhayadav.seat_reservation.show;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-import org.springframework.web.bind.annotation.*;
-
-import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/shows")
@@ -19,26 +13,34 @@ public class ReservationController {
 
     public ReservationController(
             ReservationService reservationService) {
+
         this.reservationService = reservationService;
     }
 
-@PostMapping("/{showId}/reserve")
-@ResponseStatus(HttpStatus.CREATED)
-public Reservation reserve(
-        @PathVariable UUID showId,
+    @PostMapping("/{showId}/reserve")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Reservation reserve(
+            @PathVariable UUID showId,
 
-        @RequestHeader("Idempotency-Key")
-        String idempotencyKey,
+            @RequestHeader("Idempotency-Key")
+            String idempotencyKey,
 
-        @RequestBody @Valid ReserveRequest request) {
+            @RequestBody
+            ReserveRequest request) {
 
-    String userId = "user-1"; // temporary
+        /*
+         * TEMPORARY USER ID.
+         *
+         * We will replace this with the authenticated JWT subject
+         * in the authentication step.
+         */
+        String userId = "user-1";
 
-    return reservationService.reserve(
-            showId,
-            userId,
-            idempotencyKey,
-            request
-    );
+        return reservationService.reserve(
+                showId,
+                userId,
+                idempotencyKey,
+                request
+        );
     }
 }
