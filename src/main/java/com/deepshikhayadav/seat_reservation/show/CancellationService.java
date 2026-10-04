@@ -13,17 +13,20 @@ public class CancellationService {
     private final ReservationSeatRepository reservationSeatRepository;
     private final SeatRepository seatRepository;
     private final UserShowLimitRepository userShowLimitRepository;
+    private final ReservationMetrics reservationMetrics;
 
     public CancellationService(
             ReservationRepository reservationRepository,
             ReservationSeatRepository reservationSeatRepository,
             SeatRepository seatRepository,
-            UserShowLimitRepository userShowLimitRepository) {
+            UserShowLimitRepository userShowLimitRepository,
+            ReservationMetrics reservationMetrics) {
 
         this.reservationRepository = reservationRepository;
         this.reservationSeatRepository = reservationSeatRepository;
         this.seatRepository = seatRepository;
         this.userShowLimitRepository = userShowLimitRepository;
+        this.reservationMetrics = reservationMetrics;
     }
 
     @Transactional
@@ -45,9 +48,12 @@ public class CancellationService {
                         );
 
         // ---------------------------------------------------------
-        // 2. Only the reservation owner can cancel it.
+        // 2. Only owner can cancel.
         // ---------------------------------------------------------
-        if (!reservation.getUserId().equals(userId)) {
+        if (!reservation
+                .getUserId()
+                .equals(userId)) {
+
             throw new ReservationConflictException(
                     "FORBIDDEN",
                     "You cannot cancel another user's reservation"
@@ -56,18 +62,19 @@ public class CancellationService {
 
         // ---------------------------------------------------------
         // 3. Cancellation is idempotent.
-        //
-        // If the same user sends cancellation again, simply return
-        // the already-cancelled reservation.
         // ---------------------------------------------------------
-        if ("CANCELLED".equals(reservation.getStatus())) {
+        if ("CANCELLED".equals(
+                reservation.getStatus())) {
+
             return reservation;
         }
 
         // ---------------------------------------------------------
-        // Only confirmed reservations can be cancelled.
+        // 4. Only confirmed reservations can be cancelled.
         // ---------------------------------------------------------
-        if (!"CONFIRMED".equals(reservation.getStatus())) {
+        if (!"CONFIRMED".equals(
+                reservation.getStatus())) {
+
             throw new ReservationConflictException(
                     "INVALID_RESERVATION_STATE",
                     "Only confirmed reservations can be cancelled"
@@ -75,20 +82,23 @@ public class CancellationService {
         }
 
         // ---------------------------------------------------------
-        // 4. Lock reservation-seat rows.
+        // 5. Lock reservation-seat rows.
         // ---------------------------------------------------------
         List<ReservationSeat> reservationSeats =
                 reservationSeatRepository
-                        .findByReservationIdForUpdate(reservationId);
+                        .findByReservationIdForUpdate(
+                                reservationId
+                        );
 
         if (reservationSeats.isEmpty()) {
+
             throw new IllegalStateException(
                     "Reservation has no seats"
             );
         }
 
         // ---------------------------------------------------------
-        // 5. Collect seat IDs.
+        // 6. Get seat IDs in deterministic order.
         // ---------------------------------------------------------
         List<UUID> seatIds =
                 reservationSeats.stream()
@@ -97,19 +107,22 @@ public class CancellationService {
                         .toList();
 
         // ---------------------------------------------------------
-        // 6. Lock the actual seat rows.
+        // 7. Lock actual seat rows.
         // ---------------------------------------------------------
         List<Seat> seats =
-                seatRepository.findSeatsByIdsForUpdate(seatIds);
+                seatRepository.findSeatsByIdsForUpdate(
+                        seatIds
+                );
 
         if (seats.size() != seatIds.size()) {
+
             throw new IllegalStateException(
                     "One or more reservation seats no longer exist"
             );
         }
 
         // ---------------------------------------------------------
-        // 7. Make seats available again.
+        // 8. Release seats.
         // ---------------------------------------------------------
         for (Seat seat : seats) {
             seat.setStatus("AVAILABLE");
@@ -118,7 +131,7 @@ public class CancellationService {
         seatRepository.saveAll(seats);
 
         // ---------------------------------------------------------
-        // 8. Decrease user's reserved-seat counter.
+        // 9. Decrease user's reserved-seat count.
         // ---------------------------------------------------------
         UserShowLimit userLimit =
                 userShowLimitRepository
@@ -129,33 +142,40 @@ public class CancellationService {
                         .orElseThrow(() ->
                                 new IllegalStateException(
                                         "User limit row not found"
-                                )
-                        );
+                                ));
 
         int newCount =
-                userLimit.getReservedCount() - seats.size();
+                userLimit.getReservedCount()
+                        - seats.size();
 
-        // Defensive protection against invalid negative values.
         userLimit.setReservedCount(
                 Math.max(newCount, 0)
         );
 
-        userShowLimitRepository.save(userLimit);
+        userShowLimitRepository.save(
+                userLimit
+        );
 
         // ---------------------------------------------------------
-        // 9. Mark reservation cancelled.
+        // 10. Mark reservation cancelled.
         // ---------------------------------------------------------
-        reservation.setStatus("CANCELLED");
+        reservation.setStatus(
+                "CANCELLED"
+        );
 
-        reservationRepository.save(reservation);
+        reservationRepository.save(
+                reservation
+        );
 
         // ---------------------------------------------------------
-        // Because everything is inside one transaction:
-        //
-        // seats + user count + reservation status
-        //
-        // either all commit or all roll back.
+        // 11. Update available-seat gauge.
         // ---------------------------------------------------------
+        reservationMetrics.setAvailableSeats(
+                (int) seatRepository.countByStatus(
+                        "AVAILABLE"
+                )
+        );
+
         return reservation;
     }
 }

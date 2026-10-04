@@ -15,8 +15,7 @@ public interface SeatRepository extends JpaRepository<Seat, UUID> {
     List<Seat> findByShowId(UUID showId);
 
     // ---------------------------------------------------------
-    // Reservation path:
-    // lock requested seats before checking availability.
+    // Lock requested seats during reservation.
     // ---------------------------------------------------------
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -32,8 +31,7 @@ public interface SeatRepository extends JpaRepository<Seat, UUID> {
     );
 
     // ---------------------------------------------------------
-    // Cancellation path:
-    // lock seats before changing them back to AVAILABLE.
+    // Lock seats during cancellation.
     // ---------------------------------------------------------
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -44,5 +42,18 @@ public interface SeatRepository extends JpaRepository<Seat, UUID> {
         """)
     List<Seat> findSeatsByIdsForUpdate(
             @Param("seatIds") List<UUID> seatIds
+    );
+
+    // ---------------------------------------------------------
+    // Count currently available seats.
+    // ---------------------------------------------------------
+    long countByStatus(String status);
+
+    // ---------------------------------------------------------
+    // Count available seats for one show.
+    // ---------------------------------------------------------
+    long countByShowIdAndStatus(
+            UUID showId,
+            String status
     );
 }

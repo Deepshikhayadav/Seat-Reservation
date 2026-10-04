@@ -16,6 +16,7 @@ public class ReservationService {
     private final ReservationSeatRepository reservationSeatRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final UserShowLimitRepository userShowLimitRepository;
+    private final ReservationMetrics reservationMetrics;
 
     public ReservationService(
             SeatRepository seatRepository,
@@ -23,7 +24,8 @@ public class ReservationService {
             ReservationRepository reservationRepository,
             ReservationSeatRepository reservationSeatRepository,
             IdempotencyKeyRepository idempotencyKeyRepository,
-            UserShowLimitRepository userShowLimitRepository) {
+            UserShowLimitRepository userShowLimitRepository,
+            ReservationMetrics reservationMetrics) {
 
         this.seatRepository = seatRepository;
         this.showRepository = showRepository;
@@ -31,6 +33,7 @@ public class ReservationService {
         this.reservationSeatRepository = reservationSeatRepository;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.userShowLimitRepository = userShowLimitRepository;
+        this.reservationMetrics = reservationMetrics;
     }
 
     @Transactional
@@ -40,18 +43,17 @@ public class ReservationService {
             String idempotencyKey,
             ReserveRequest request) {
 
-        // ------------------------------------------------------------
-        // 1. Validate show
-        // ------------------------------------------------------------
+        // ---------------------------------------------------------
+        // 1. Validate show.
+        // ---------------------------------------------------------
+        Show show =
+                showRepository.findById(showId)
+                        .orElseThrow(() ->
+                                new RuntimeException("Show not found"));
 
-        Show show = showRepository.findById(showId)
-                .orElseThrow(() ->
-                        new RuntimeException("Show not found"));
-
-        // ------------------------------------------------------------
-        // 2. Validate idempotency key
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 2. Validate idempotency key.
+        // ---------------------------------------------------------
         if (idempotencyKey == null ||
                 idempotencyKey.isBlank()) {
 
@@ -60,18 +62,18 @@ public class ReservationService {
             );
         }
 
-        // ------------------------------------------------------------
-        // 3. Normalize seats
+        // ---------------------------------------------------------
+        // 3. Normalize requested seats.
         //
-        // Sorting is important because concurrent multi-seat requests
-        // must acquire seat locks in the same order.
-        // ------------------------------------------------------------
-
-        List<String> requestedSeats = request.getSeats()
-                .stream()
-                .distinct()
-                .sorted()
-                .toList();
+        // Sorting is important because concurrent requests acquire
+        // seat locks in the same order.
+        // ---------------------------------------------------------
+        List<String> requestedSeats =
+                request.getSeats()
+                        .stream()
+                        .distinct()
+                        .sorted()
+                        .toList();
 
         if (requestedSeats.isEmpty()) {
             throw new IllegalArgumentException(
@@ -79,25 +81,20 @@ public class ReservationService {
             );
         }
 
-        int requestedCount = requestedSeats.size();
+        int requestedCount =
+                requestedSeats.size();
 
-        // ------------------------------------------------------------
-        // 4. Create deterministic hash of the request body
-        //
-        // ["A2", "A1"] and ["A1", "A2"] become the same request.
-        // ------------------------------------------------------------
+        // ---------------------------------------------------------
+        // 4. Hash normalized request.
+        // ---------------------------------------------------------
+        String requestHash =
+                HashUtil.sha256(
+                        String.join(",", requestedSeats)
+                );
 
-        String requestHash = HashUtil.sha256(
-                String.join(",", requestedSeats)
-        );
-
-        // ------------------------------------------------------------
-        // 5. Create idempotency record if this is a new key.
-        //
-        // PostgreSQL unique constraint makes this safe when many
-        // identical requests arrive concurrently.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 5. Create idempotency record if it does not exist.
+        // ---------------------------------------------------------
         idempotencyKeyRepository.createIfAbsent(
                 UUID.randomUUID(),
                 userId,
@@ -106,10 +103,9 @@ public class ReservationService {
                 requestHash
         );
 
-        // ------------------------------------------------------------
-        // 6. Lock the idempotency row.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 6. Lock idempotency row.
+        // ---------------------------------------------------------
         IdempotencyKey idempotencyRecord =
                 idempotencyKeyRepository
                         .findForUpdate(
@@ -122,29 +118,29 @@ public class ReservationService {
                                         "Idempotency record not found"
                                 ));
 
-        // ------------------------------------------------------------
-        // 7. Same key + different request = 409
-        // ------------------------------------------------------------
-
-        if (!idempotencyRecord.getRequestHash()
+        // ---------------------------------------------------------
+        // 7. Same key but different request.
+        // ---------------------------------------------------------
+        if (!idempotencyRecord
+                .getRequestHash()
                 .equals(requestHash)) {
 
             throw new ReservationConflictException(
                     "IDEMPOTENCY_CONFLICT",
-                    "Idempotency key was already used " +
-                    "with a different request"
+                    "Idempotency key was already used with a different request"
             );
         }
 
-        // ------------------------------------------------------------
-        // 8. Same key + same request + already confirmed
+        // ---------------------------------------------------------
+        // 8. Same key + same request.
         //
-        // This is a normal retry.
         // Return the original reservation.
-        // ------------------------------------------------------------
-
+        // Do NOT create another reservation.
+        // ---------------------------------------------------------
         if ("CONFIRMED".equals(
                 idempotencyRecord.getStatus())) {
+
+            reservationMetrics.idempotentReplay();
 
             return reservationRepository
                     .findById(
@@ -156,10 +152,9 @@ public class ReservationService {
                             ));
         }
 
-        // ------------------------------------------------------------
-        // 9. Lock/create user's per-show counter row
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 9. Create/lock per-user limit row.
+        // ---------------------------------------------------------
         userShowLimitRepository.createIfAbsent(
                 UUID.randomUUID(),
                 showId,
@@ -168,25 +163,28 @@ public class ReservationService {
 
         UserShowLimit userLimit =
                 userShowLimitRepository
-                        .findForUpdate(showId, userId)
+                        .findForUpdate(
+                                showId,
+                                userId
+                        )
                         .orElseThrow(() ->
                                 new IllegalStateException(
                                         "User limit row not found"
                                 ));
 
-        // ------------------------------------------------------------
-        // 10. Check per-user limit
-        //
-        // All requested seats are accepted or all are rejected.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 10. Enforce per-user limit.
+        // ---------------------------------------------------------
         int currentCount =
                 userLimit.getReservedCount();
 
         int maxAllowed =
                 show.getPerUserLimit();
 
-        if (currentCount + requestedCount > maxAllowed) {
+        if (currentCount + requestedCount >
+                maxAllowed) {
+
+            reservationMetrics.perUserLimit();
 
             throw new ReservationConflictException(
                     "PER_USER_LIMIT",
@@ -194,23 +192,21 @@ public class ReservationService {
             );
         }
 
-        // ------------------------------------------------------------
-        // 11. Lock all requested seats.
-        //
-        // SeatRepository uses PESSIMISTIC_WRITE / FOR UPDATE.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 11. Lock requested seats.
+        // ---------------------------------------------------------
         List<Seat> seats =
                 seatRepository.findSeatsForUpdate(
                         showId,
                         requestedSeats
                 );
 
-        // ------------------------------------------------------------
-        // 12. Every requested seat must exist.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 12. Check that every requested seat exists.
+        // ---------------------------------------------------------
         if (seats.size() != requestedCount) {
+
+            reservationMetrics.seatNotFound();
 
             throw new ReservationConflictException(
                     "SEAT_NOT_FOUND",
@@ -218,20 +214,19 @@ public class ReservationService {
             );
         }
 
-        // ------------------------------------------------------------
-        // 13. All-or-nothing semantics.
-        //
-        // If even one seat is already taken, the entire request
-        // is rejected.
-        // ------------------------------------------------------------
-
-        boolean anyTaken = seats.stream()
-                .anyMatch(seat ->
-                        !"AVAILABLE".equals(
-                                seat.getStatus()
-                        ));
+        // ---------------------------------------------------------
+        // 13. Check availability.
+        // ---------------------------------------------------------
+        boolean anyTaken =
+                seats.stream()
+                        .anyMatch(seat ->
+                                !"AVAILABLE".equals(
+                                        seat.getStatus()
+                                ));
 
         if (anyTaken) {
+
+            reservationMetrics.seatTaken();
 
             throw new ReservationConflictException(
                     "SEAT_TAKEN",
@@ -239,33 +234,39 @@ public class ReservationService {
             );
         }
 
-        // ------------------------------------------------------------
-        // 14. Calculate price using integer paise.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 14. Calculate amount using integer paise.
+        // ---------------------------------------------------------
         long amount =
                 show.getPricePaise() * requestedCount;
 
-        // ------------------------------------------------------------
+        // ---------------------------------------------------------
         // 15. Create reservation.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
         Reservation reservation =
                 new Reservation();
 
         // reservation.setId(UUID.randomUUID());
+
         reservation.setShowId(showId);
+
         reservation.setUserId(userId);
+
         reservation.setAmountPaise(amount);
+
         reservation.setStatus("CONFIRMED");
-        reservation.setCreatedAt(LocalDateTime.now());
 
-        reservationRepository.save(reservation);
+        reservation.setCreatedAt(
+                LocalDateTime.now()
+        );
 
-        // ------------------------------------------------------------
-        // 16. Store reservation -> seat relationships.
-        // ------------------------------------------------------------
+        reservationRepository.save(
+                reservation
+        );
 
+        // ---------------------------------------------------------
+        // 16. Create reservation-seat rows.
+        // ---------------------------------------------------------
         List<ReservationSeat> reservationSeats =
                 seats.stream()
                         .map(seat -> {
@@ -273,7 +274,9 @@ public class ReservationService {
                             ReservationSeat rs =
                                     new ReservationSeat();
 
-                            rs.setId(UUID.randomUUID());
+                            rs.setId(
+                                    UUID.randomUUID()
+                            );
 
                             rs.setReservationId(
                                     reservation.getId()
@@ -291,52 +294,52 @@ public class ReservationService {
                 reservationSeats
         );
 
-        // ------------------------------------------------------------
-        // 17. Mark seats as confirmed.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 17. Mark seats confirmed.
+        // ---------------------------------------------------------
         for (Seat seat : seats) {
             seat.setStatus("CONFIRMED");
         }
 
         seatRepository.saveAll(seats);
 
-        // ------------------------------------------------------------
-        // 18. Increase user's reserved seat counter.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
+        // 18. Increment user reservation count.
+        // ---------------------------------------------------------
         userLimit.setReservedCount(
                 currentCount + requestedCount
         );
 
-        userShowLimitRepository.save(userLimit);
+        userShowLimitRepository.save(
+                userLimit
+        );
 
-        // ------------------------------------------------------------
+        // ---------------------------------------------------------
         // 19. Complete idempotency record.
-        // ------------------------------------------------------------
-
+        // ---------------------------------------------------------
         idempotencyRecord.setReservationId(
                 reservation.getId()
         );
 
-        idempotencyRecord.setStatus("CONFIRMED");
+        idempotencyRecord.setStatus(
+                "CONFIRMED"
+        );
 
         idempotencyKeyRepository.save(
                 idempotencyRecord
         );
 
-        // ------------------------------------------------------------
-        // 20. Transaction commits automatically here.
-        //
-        // If anything above throws an exception, the whole transaction
-        // rolls back:
-        //
-        // reservation
-        // reservation_seats
-        // seat status
-        // user counter
-        // idempotency record
-        // ------------------------------------------------------------
+        // ---------------------------------------------------------
+        // 20. Metrics.
+        // ---------------------------------------------------------
+        reservationMetrics.confirmed();
+
+        // Update global available-seat gauge.
+        reservationMetrics.setAvailableSeats(
+                (int) seatRepository.countByStatus(
+                        "AVAILABLE"
+                )
+        );
 
         return reservation;
     }

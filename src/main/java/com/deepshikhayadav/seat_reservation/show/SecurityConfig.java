@@ -38,8 +38,8 @@ public class SecurityConfig {
                         // Admin authentication can be tightened later.
                         .requestMatchers("/shows", "/shows/**").permitAll()
 
-                        // Health endpoint can be used later by deployment.
-                        .requestMatchers("/actuator/health/**").permitAll()
+                        // Health checks and Prometheus scraping are unauthenticated.
+                        .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
 
                         // Everything else requires authentication.
                         .anyRequest().authenticated()

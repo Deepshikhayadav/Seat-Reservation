@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+
+    <!--
+        Console JSON logs.
+
+        Every request will contain:
+        - timestamp
+        - log level
+        - logger
+        - message
+        - request_id
+    -->
+
+    <appender name="CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender">
+
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+
+            <!--
+                Include the correlation/request ID
+                stored by RequestLoggingFilter.
+            -->
+            <includeMdcKeyName>request_id</includeMdcKeyName>
+
+        </encoder>
+
+    </appender>
+
+    <root level="INFO">
+
+        <appender-ref ref="CONSOLE"/>
+
+    </root>
+
+</configuration>
