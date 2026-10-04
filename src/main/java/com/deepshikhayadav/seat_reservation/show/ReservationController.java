@@ -1,6 +1,7 @@
 package com.deepshikhayadav.seat_reservation.show;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -13,7 +14,6 @@ public class ReservationController {
 
     public ReservationController(
             ReservationService reservationService) {
-
         this.reservationService = reservationService;
     }
 
@@ -26,15 +26,12 @@ public class ReservationController {
             String idempotencyKey,
 
             @RequestBody
-            ReserveRequest request) {
+            ReserveRequest request,
 
-        /*
-         * TEMPORARY USER ID.
-         *
-         * We will replace this with the authenticated JWT subject
-         * in the authentication step.
-         */
-        String userId = "user-1";
+            Authentication authentication) {
+
+       
+        String userId = authentication.getName();
 
         return reservationService.reserve(
                 showId,

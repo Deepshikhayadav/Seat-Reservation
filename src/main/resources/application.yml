@@ -18,8 +18,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+app:
+  jwt:
+    secret: "change-this-local-secret-to-at-least-32-characters-long"
 
 server:
   port: 8082
 
-
+  

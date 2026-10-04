@@ -1,6 +1,7 @@
 package com.deepshikhayadav.seat_reservation.show;
 
 import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -9,17 +10,14 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.UUID;
 
-public interface SeatRepository
-        extends JpaRepository<Seat, UUID> {
+public interface SeatRepository extends JpaRepository<Seat, UUID> {
 
     List<Seat> findByShowId(UUID showId);
 
-    /*
-     * FOR UPDATE locks the selected seat rows.
-     *
-     * Sorting the input seat numbers ensures concurrent multi-seat
-     * requests acquire locks in a deterministic order.
-     */
+    // ---------------------------------------------------------
+    // Reservation path:
+    // lock requested seats before checking availability.
+    // ---------------------------------------------------------
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT s
@@ -31,5 +29,20 @@ public interface SeatRepository
     List<Seat> findSeatsForUpdate(
             @Param("showId") UUID showId,
             @Param("seatNumbers") List<String> seatNumbers
+    );
+
+    // ---------------------------------------------------------
+    // Cancellation path:
+    // lock seats before changing them back to AVAILABLE.
+    // ---------------------------------------------------------
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT s
+        FROM Seat s
+        WHERE s.id IN :seatIds
+        ORDER BY s.id
+        """)
+    List<Seat> findSeatsByIdsForUpdate(
+            @Param("seatIds") List<UUID> seatIds
     );
 }
