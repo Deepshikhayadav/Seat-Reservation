@@ -1,6 +1,5 @@
 package com.deepshikhayadav.seat_reservation.show;
 
-
 import javax.crypto.spec.SecretKeySpec;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -29,24 +28,33 @@ public class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http
-                // This is a JSON API, so CSRF protection is not needed.
                 .csrf(csrf -> csrf.disable())
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // Keep show creation/read available for now.
-                        // Admin authentication can be tightened later.
-                        .requestMatchers("/shows", "/shows/**").permitAll()
+                        // -------------------------------------------------
+                        // Health endpoints are public so Render can check
+                        // whether the application is alive/ready.
+                        // -------------------------------------------------
+                        .requestMatchers(
+                                "/actuator/health/**",
+                                "/actuator/prometheus"
+                        ).permitAll()
 
-                        // Health checks and Prometheus scraping are unauthenticated.
-                        .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
+                        // -------------------------------------------------
+                        // Show APIs.
+                        //
+                        // Admin authorization will be tightened later.
+                        // -------------------------------------------------
+                        .requestMatchers(
+                                "/shows",
+                                "/shows/**"
+                        ).permitAll()
 
-                        // Everything else requires authentication.
+                        // Everything else requires JWT.
                         .anyRequest().authenticated()
                 )
 
-                // Read and validate:
-                // Authorization: Bearer <JWT>
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt -> {})
                 );
@@ -61,7 +69,10 @@ public class SecurityConfig {
                 jwtSecret.getBytes(StandardCharsets.UTF_8);
 
         SecretKeySpec secretKey =
-                new SecretKeySpec(secretBytes, "HmacSHA256");
+                new SecretKeySpec(
+                        secretBytes,
+                        "HmacSHA256"
+                );
 
         return NimbusJwtDecoder
                 .withSecretKey(secretKey)

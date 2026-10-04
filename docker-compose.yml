@@ -2,15 +2,56 @@ services:
 
   postgres:
     image: postgres:16
+
     container_name: seat-reservation-postgres
+
     environment:
       POSTGRES_DB: seat_reservation
       POSTGRES_USER: reservation_user
       POSTGRES_PASSWORD: reservation_password
+
     ports:
       - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U reservation_user -d seat_reservation"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+
+  app:
+    build:
+      context: .
+
+    container_name: seat-reservation-app
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seat_reservation
+
+      SPRING_DATASOURCE_USERNAME: reservation_user
+
+      SPRING_DATASOURCE_PASSWORD: reservation_password
+
+      JWT_SECRET: change-this-local-secret-to-at-least-32-characters-long
+
+      PORT: 8080
+
+    ports:
+      - "8080:8080"
+
 
 volumes:
   postgres_data:

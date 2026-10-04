@@ -1,0 +1,12 @@
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+
+.env
+.env.*
+application-local.yml
+
+node_modules/
+.DS_Store

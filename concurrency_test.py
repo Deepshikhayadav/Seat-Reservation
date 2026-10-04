@@ -3,7 +3,7 @@ import concurrent.futures
 import uuid
 import sys
 
-BASE_URL = "http://localhost:8082"
+BASE_URL = "http://localhost:8080"
 
 
 def reserve(show_id, index):

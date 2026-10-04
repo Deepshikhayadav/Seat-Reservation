@@ -2,7 +2,7 @@ import requests
 import sys
 import uuid
 
-BASE_URL = "http://localhost:8082"
+BASE_URL = "http://localhost:8080"
 
 
 def check(condition, message):
