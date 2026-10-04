@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 
 
@@ -19,19 +22,23 @@ public class ReservationController {
         this.reservationService = reservationService;
     }
 
-    @PostMapping("/{showId}/reserve")
-    @ResponseStatus(HttpStatus.CREATED)
-    public Reservation reserve(
-            @PathVariable UUID showId,
-            @RequestBody ReserveRequest request) {
+@PostMapping("/{showId}/reserve")
+@ResponseStatus(HttpStatus.CREATED)
+public Reservation reserve(
+        @PathVariable UUID showId,
 
-        // TEMPORARY USER
-        String userId = "user-1";
+        @RequestHeader("Idempotency-Key")
+        String idempotencyKey,
 
-        return reservationService.reserve(
-                showId,
-                userId,
-                request
-        );
+        @RequestBody @Valid ReserveRequest request) {
+
+    String userId = "user-1"; // temporary
+
+    return reservationService.reserve(
+            showId,
+            userId,
+            idempotencyKey,
+            request
+    );
     }
 }
