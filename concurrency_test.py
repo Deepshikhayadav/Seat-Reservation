@@ -2,15 +2,18 @@ import requests
 import concurrent.futures
 import uuid
 import sys
+from jwt_token import create_token 
 
 BASE_URL = "http://localhost:8080"
 
+JWT_TOKEN = create_token("concurrency-user")
 
 def reserve(show_id, index):
     try:
         response = requests.post(
             f"{BASE_URL}/shows/{show_id}/reserve",
             headers={
+                "Authorization": f"Bearer {JWT_TOKEN}",
                 "Idempotency-Key": f"concurrent-{index}-{uuid.uuid4()}"
             },
             json={
